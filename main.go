@@ -104,35 +104,23 @@ func handleTransactions() http.HandlerFunc {
 			return
 		}
 
-		var limit, balance int
-		tx, err := db.Begin(r.Context())
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
+		var newBalance int
+		var success bool
+		var limit int
+		if tr.Type == "c" {
+			err = db.QueryRow(r.Context(), "SELECT * FROM credit($1, $2, $3)", customerID, tr.Value, tr.Descricao).Scan(&newBalance, &success, &limit)
+		} else {
+			err = db.QueryRow(r.Context(), "SELECT * FROM debit($1, $2, $3)", customerID, tr.Value, tr.Descricao).Scan(&newBalance, &success, &limit)
+		}
+
+		if err != nil || !success {
+			w.WriteHeader(http.StatusUnprocessableEntity)
 			w.Write([]byte(`{}`))
 			return
 		}
 
-		defer tx.Rollback(r.Context())
-
-		tx.QueryRow(r.Context(), "SELECT \"limit\", balance FROM customers WHERE id = $1", customerID).Scan(&limit, &balance)
-
-		if tr.Type == "c" {
-			balance += tr.Value
-		} else {
-			balance -= tr.Value
-			if balance < -limit {
-				w.WriteHeader(http.StatusUnprocessableEntity)
-				w.Write([]byte(`{}`))
-				return
-			}
-		}
-
-		tx.Exec(r.Context(), "UPDATE customers SET balance = $1 WHERE id = $2", balance, customerID)
-		tx.Exec(r.Context(), "INSERT INTO transactions (customer_id, amount, type, description) VALUES ($1, $2, $3, $4)", customerID, tr.Value, tr.Type, tr.Descricao)
-		tx.Commit(r.Context())
-
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"limite": ` + fmt.Sprintf("%d", limit) + `, "saldo": ` + fmt.Sprintf("%d", balance) + `}`))
+		w.Write([]byte(`{"limite": ` + fmt.Sprintf("%d", limit) + `, "saldo": ` + fmt.Sprintf("%d", newBalance) + `}`))
 	}
 }
 
