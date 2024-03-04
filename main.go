@@ -14,8 +14,6 @@ import (
 
 var db *pgxpool.Pool
 
-const date = "2024-01-01T02:34:38.543030Z"
-
 func main() {
 	println("Starting...")
 
